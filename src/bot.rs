@@ -11,7 +11,6 @@ struct Bot{
     gpt: Gpt
 }
 
-
 pub async fn run_discord_bot(gpt: Gpt) {
     // Login with a bot token from the environment
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
@@ -40,20 +39,25 @@ impl EventHandler for Bot {
         match &msg.content.as_str() {
             x if x.contains("/chat") => {
                 println!("/chat");
+                let result = x.replace("/chat", "");
                 // cut off /chat and send the message to gpt
-                let result = self.gpt.create_chat().await.unwrap();
-                let result = msg.channel_id.say(&ctx.http, result).await;
+                let result = self.gpt.create_chat(result).await.unwrap();
+                let _ = msg.channel_id.say(&ctx.http, result).await;
             }
             x if x.contains("/image") => {
                 println!("/image");
+
+                let result = x.replace("/image", "");
+                let path = self.gpt.create_image(result).await.unwrap();
+                let p = ["attachment://", &path].join(""); // write path in docker doesn't work'
                 let image_message = CreateEmbed::default()
-                    .image("attachment://image.png");
+                    .image(p);
 
                 let create_message = CreateMessage::new()
                     .embed(image_message)
-                    .add_file(CreateAttachment::path("./image.png").await.unwrap());
+                    .add_file(CreateAttachment::path(path).await.unwrap());
 
-                let result = msg.channel_id.send_message(&ctx.http, create_message).await;
+                let _ = msg.channel_id.send_message(&ctx.http, create_message).await;
             }
             _ => {
                 // no op

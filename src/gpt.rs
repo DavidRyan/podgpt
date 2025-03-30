@@ -16,11 +16,10 @@ impl Gpt {
     }}
 
 impl Gpt {
-    pub async fn create_image(&self) -> Result<(), Box<dyn Error>> {
+    pub async fn create_image(&self, prompt: String) -> Result<(String), Box<dyn Error>> {
 
         let request = CreateImageRequestArgs::default()
-            .prompt("cats on sofa and carpet in living room")
-            .n(2)
+            .prompt(prompt)
             .response_format(ImageResponseFormat::Url)
             .size(ImageSize::S256x256)
             .user("async-openai")
@@ -38,13 +37,15 @@ impl Gpt {
             .for_each(|path| println!("Image file path: {}", path.display()));
 
 
-        Ok(())
+        let s = paths.first().unwrap().to_str().unwrap();
+        println!("Image file path: {}", s);
+        Ok(s.to_string())
     }
 
-    pub async fn create_chat(&self) -> Result<(String), Box<dyn Error>> {
+    pub async fn create_chat(&self, promt: String) -> Result<(String), Box<dyn Error>> {
         let request = CreateCompletionRequestArgs::default()
             .model("gpt-3.5-turbo-instruct")
-            .prompt("Translate the following English text to French: 'Hello, how are you?'")
+            .prompt(promt)
             .build()?;
         let response = self.client.completions().create(request).await.unwrap();
         let msg = &response.choices[0].text;
