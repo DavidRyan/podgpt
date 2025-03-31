@@ -1,25 +1,20 @@
 use crate::commands::chat;
+//use crate::commands::image;
+use crate::commands::all_commands::AllCommands;
 use crate::gpt::Gpt;
 
 use std::env;
 use serenity::all::{GuildId, Interaction, Ready};
+use serenity_commands::Commands;
 use serenity::async_trait;
 use serenity::builder::{CreateAttachment, CreateEmbed, CreateEmbedFooter, CreateMessage};
 use serenity::model::channel::Message;
 use serenity::prelude::*;
-use serenity_commands::Commands;
+
 
 struct Bot{
     gpt: Gpt,
     guild_id: GuildId
-}
-
-#[derive(Debug, Commands)]
-enum AllCommands {
-    /// Chat with the bot
-    Chat,
-    /// Generate an image
-    Image
 }
 
 pub async fn run_discord_bot(gpt: Gpt) {
@@ -33,7 +28,7 @@ pub async fn run_discord_bot(gpt: Gpt) {
     // Create a new instance of the Client, logging in as a bot.
     let mut client =
         Client::builder(&token, intents).event_handler(Bot{
-            gpt: gpt,
+            gpt,
             guild_id: GuildId::new(1354958928169013338)
         }).await.expect("Err creating client");
 
@@ -54,13 +49,12 @@ impl EventHandler for Bot {
     async fn interaction_create(&self, _ctx: Context, interaction: Interaction) {
         if let Interaction::Command(command) = interaction {
             let command_data = AllCommands::from_command_data(&command.data).unwrap();
-            match command_data {
+            let _response = match command_data {
                 AllCommands::Chat => chat::chat(&self.gpt, &command).await,
                 AllCommands::Image => {
-                    let prompt = command.data.options[0].value.as_str().unwrap().to_string();
-                    let result = self.gpt.create_image(prompt).await.unwrap();
+                    "".to_string()
                 }
-            }
+            };
 
         }
     }
@@ -71,10 +65,6 @@ impl EventHandler for Bot {
         match &msg.content.as_str() {
             x if x.contains("/chat") => {
                 println!("/chat");
-                let result = x.replace("/chat", "");
-                // cut off /chat and send the message to gpt
-                let result = self.gpt.create_chat(result).await.unwrap();
-                let _ = msg.channel_id.say(&ctx.http, result).await;
             }
             x if x.contains("/image") => {
                 println!("/image");
