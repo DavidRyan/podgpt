@@ -1,5 +1,6 @@
-
+use crate::commands::chat;
 use crate::gpt::Gpt;
+
 use std::env;
 use serenity::all::{GuildId, Interaction, Ready};
 use serenity::async_trait;
@@ -53,7 +54,14 @@ impl EventHandler for Bot {
     async fn interaction_create(&self, _ctx: Context, interaction: Interaction) {
         if let Interaction::Command(command) = interaction {
             let command_data = AllCommands::from_command_data(&command.data).unwrap();
-            println!("Command: {:?}", command_data);
+            match command_data {
+                AllCommands::Chat => chat::chat(&self.gpt, &command).await,
+                AllCommands::Image => {
+                    let prompt = command.data.options[0].value.as_str().unwrap().to_string();
+                    let result = self.gpt.create_image(prompt).await.unwrap();
+                }
+            }
+
         }
     }
 

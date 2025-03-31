@@ -1,5 +1,6 @@
 mod bot;
 mod gpt;
+mod commands;
 
 use bot::run_discord_bot;
 use gpt::Gpt;
