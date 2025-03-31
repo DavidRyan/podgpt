@@ -704,6 +704,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bf151400ff0baff5465007dd2f3e717f3fe502074ca563069ce3a6629d07b289"
 
 [[package]]
+name = "heck"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
+
+[[package]]
 name = "http"
 version = "0.2.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1271,6 +1277,7 @@ version = "0.1.0"
 dependencies = [
  "async-openai",
  "serenity",
+ "serenity-commands",
  "tokio",
 ]
 
@@ -1889,6 +1896,30 @@ dependencies = [
  "typesize",
  "url",
  "uwl",
+]
+
+[[package]]
+name = "serenity-commands"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea09a23f0733fb2eeb9844d0c619c9324244b715dfe381b265d4c2a558d9998f"
+dependencies = [
+ "serenity",
+ "serenity-commands-macros",
+ "thiserror 2.0.12",
+]
+
+[[package]]
+name = "serenity-commands-macros"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb371bcd247ecb33c2ecf33a17ae8e6d09c7e93cc2d34d70b02f060f15f257d9"
+dependencies = [
+ "darling",
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
 ]
 
 [[package]]

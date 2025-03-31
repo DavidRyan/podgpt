@@ -1,14 +1,24 @@
 
 use crate::gpt::Gpt;
 use std::env;
-
+use serenity::all::{GuildId, Interaction, Ready};
 use serenity::async_trait;
 use serenity::builder::{CreateAttachment, CreateEmbed, CreateEmbedFooter, CreateMessage};
 use serenity::model::channel::Message;
 use serenity::prelude::*;
+use serenity_commands::Commands;
 
 struct Bot{
-    gpt: Gpt
+    gpt: Gpt,
+    guild_id: GuildId
+}
+
+#[derive(Debug, Commands)]
+enum AllCommands {
+    /// Chat with the bot
+    Chat,
+    /// Generate an image
+    Image
 }
 
 pub async fn run_discord_bot(gpt: Gpt) {
@@ -22,7 +32,8 @@ pub async fn run_discord_bot(gpt: Gpt) {
     // Create a new instance of the Client, logging in as a bot.
     let mut client =
         Client::builder(&token, intents).event_handler(Bot{
-            gpt
+            gpt: gpt,
+            guild_id: GuildId::new(1354958928169013338)
         }).await.expect("Err creating client");
 
     // Start listening for events by starting a single shard
@@ -33,6 +44,19 @@ pub async fn run_discord_bot(gpt: Gpt) {
 
 #[async_trait]
 impl EventHandler for Bot {
+
+    async fn ready(&self, ctx: Context, _ready: Ready) {
+        println!("{} is connected!", ctx.cache.current_user().name);
+        self.guild_id.set_commands(&ctx, AllCommands::create_commands()).await.unwrap();
+    }
+
+    async fn interaction_create(&self, _ctx: Context, interaction: Interaction) {
+        if let Interaction::Command(command) = interaction {
+            let command_data = AllCommands::from_command_data(&command.data).unwrap();
+            println!("Command: {:?}", command_data);
+        }
+    }
+
     async fn message(&self, ctx: Context, msg: Message) {
 
 
