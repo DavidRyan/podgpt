@@ -1,22 +1,37 @@
 use async_openai::{
-    types::{CreateCompletionRequestArgs, CreateImageRequestArgs, ImageResponseFormat, ImageSize, RequiredAction},
-    Client, config::OpenAIConfig,
+    config::OpenAIConfig, types::{
+        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs, ImageResponseFormat, ImageSize }, 
+    Client
 };
-use std::{error::Error, sync::Arc};
+use std::error::Error;
+
+#[derive(Debug)]
+pub struct Conversation {
+    pub _id: String,
+    pub messages: Vec<String>
+}
 
 pub struct Gpt {
-    client: Client<OpenAIConfig>
+    client: Client<OpenAIConfig>,
+    conversation: Conversation
 }
+
 
 impl Gpt {
     pub fn new() -> Self {
         Gpt {
-            client:  Client::new()
+            client:  Client::with_config(
+                         OpenAIConfig::new()
+                     ),
+            conversation: Conversation {
+                _id: "1".to_string(),
+                messages: vec![]
+            }
         }
     }}
 
 impl Gpt {
-    pub async fn create_image(&self, prompt: String) -> Result<(String), Box<dyn Error>> {
+    pub async fn create_image(&self, prompt: String) -> Result<String, Box<dyn Error>> {
 
         let request = CreateImageRequestArgs::default()
             .prompt(prompt)
@@ -42,13 +57,52 @@ impl Gpt {
         Ok(s.to_string())
     }
 
-    pub async fn create_chat(&self, promt: String) -> Result<(String), Box<dyn Error>> {
-        let request = CreateCompletionRequestArgs::default()
-            .model("gpt-3.5-turbo-instruct")
-            .prompt(promt)
+    pub async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
+        self.conversation.messages.push(promt.clone());
+        println!("Conversation: {:?}", self.conversation);
+
+        //ChatCompletionRequestMessage
+        let mapped_messages: Vec<ChatCompletionRequestMessage> = self.conversation.messages.iter()
+            .map(|msg| {
+                ChatCompletionRequestSystemMessageArgs::default()
+                    .content(msg.to_string())
+                    .build()
+                    .unwrap()
+                    .into()
+            })
+            .collect::<Vec<_>>();
+
+        let request = CreateChatCompletionRequestArgs::default()
+            .max_tokens(512u32)
+            .model("gpt-4o")
+            .messages(mapped_messages)
             .build()?;
-        let response = self.client.completions().create(request).await.unwrap();
-        let msg = &response.choices[0].text;
-        Ok(msg.to_string())
+        let response = self.client.chat().create(request).await?;
+        let msg = response.choices[0].message.clone().content.unwrap().to_string();
+        self.conversation.messages.push(msg.clone());
+        Ok(msg)
+    }
+
+    pub async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
+        let request = CreateChatCompletionRequestArgs::default()
+            .max_tokens(512u32)
+            .model("gpt-4o")
+            .messages([
+                ChatCompletionRequestSystemMessageArgs::default()
+                .content(promt.clone())
+                .build()?
+                .into(),
+            ])
+            .build()?;
+        let response = self.client.chat().create(request).await?;
+        let msg = response.choices[0].message.clone().content.unwrap().to_string();
+        self.conversation = Conversation {
+            _id: response.id,
+            messages: vec![]
+        };
+        self.conversation.messages.push(promt);
+        self.conversation.messages.push(msg.clone());
+        println!("Conversation1: {:?}", self.conversation);
+        Ok(msg)
     }
 }

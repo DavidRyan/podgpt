@@ -1,89 +1,71 @@
-use crate::commands::chat;
-//use crate::commands::image;
-use crate::commands::all_commands::AllCommands;
 use crate::gpt::Gpt;
 
 use std::env;
-use serenity::all::{GuildId, Interaction, Ready};
-use serenity_commands::Commands;
-use serenity::async_trait;
-use serenity::builder::{CreateAttachment, CreateEmbed, CreateEmbedFooter, CreateMessage};
-use serenity::model::channel::Message;
-use serenity::prelude::*;
+use poise::serenity_prelude as serenity;
+use tokio::sync::Mutex;
+
+struct Data {
+    gpt: Mutex<Gpt>
+} // User data, which is stored and accessible in all command invocations
+type Error = Box<dyn std::error::Error + Send + Sync>;
+type Context<'a> = poise::Context<'a, Data, Error>;
 
 
-struct Bot{
-    gpt: Gpt,
-    guild_id: GuildId
+#[poise::command(slash_command, prefix_command)]
+async fn ask(
+    ctx: Context<'_>,
+    #[description = "Ask Chat Gpt"] #[rest] prompt: String,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+    let r = ctx.data().gpt.lock().await.create_chat(prompt).await.unwrap();
+    println!("Response: {}", r);
+    ctx.say(r).await?;
+    Ok(())
 }
 
-pub async fn run_discord_bot(gpt: Gpt) {
+#[poise::command(slash_command, prefix_command)]
+async fn reply(
+    ctx: Context<'_>,
+    #[description = "Reply to Chat Gpt"] #[rest] prompt: String,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+    let r = ctx.data().gpt.lock().await.reply_to_chat(prompt).await.unwrap();
+    println!("Response: {}", r);
+    ctx.say(r).await?;
+    Ok(())
+}
+
+#[poise::command(prefix_command)]
+pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
+    poise::builtins::register_application_commands_buttons(ctx).await?;
+    Ok(())
+}
+
+pub async fn run_discord_bot() {
     // Login with a bot token from the environment
     let token = env::var("DISCORD_TOKEN").expect("Expected a token in the environment");
-    // Set gateway intents, which decides what events the bot will be notified about
-    let intents = GatewayIntents::GUILD_MESSAGES
-        | GatewayIntents::DIRECT_MESSAGES
-        | GatewayIntents::MESSAGE_CONTENT;
+    let intents = serenity::GatewayIntents::non_privileged();
 
-    // Create a new instance of the Client, logging in as a bot.
-    let mut client =
-        Client::builder(&token, intents).event_handler(Bot{
-            gpt,
-            guild_id: GuildId::new(1354958928169013338)
-        }).await.expect("Err creating client");
+    let framework = poise::Framework::builder()
+        .options(poise::FrameworkOptions {
+            commands: vec![ask(), reply(), register()],
+            ..Default::default()
+        })
+        .setup(|ctx, _ready, framework| {
+            println!("Bot is ready!");
+            Box::pin(async move {
+                poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                Ok(Data {
+                    gpt: Mutex::new(Gpt::new())
+                })
+            })
+        })
+        .build();
 
-    // Start listening for events by starting a single shard
-    if let Err(why) = client.start().await {
-        println!("Client error: {why:?}");
-    }
+    let client = serenity::ClientBuilder::new(token, intents)
+        .framework(framework)
+        .await;
+    client.unwrap().start().await.unwrap();    
 }
+    
 
-#[async_trait]
-impl EventHandler for Bot {
-
-    async fn ready(&self, ctx: Context, _ready: Ready) {
-        println!("{} is connected!", ctx.cache.current_user().name);
-        self.guild_id.set_commands(&ctx, AllCommands::create_commands()).await.unwrap();
-    }
-
-    async fn interaction_create(&self, _ctx: Context, interaction: Interaction) {
-        if let Interaction::Command(command) = interaction {
-            let command_data = AllCommands::from_command_data(&command.data).unwrap();
-            let _response = match command_data {
-                AllCommands::Chat => chat::chat(&self.gpt, &command).await,
-                AllCommands::Image => {
-                    "".to_string()
-                }
-            };
-
-        }
-    }
-
-    async fn message(&self, ctx: Context, msg: Message) {
-
-
-        match &msg.content.as_str() {
-            x if x.contains("/chat") => {
-                println!("/chat");
-            }
-            x if x.contains("/image") => {
-                println!("/image");
-
-                let result = x.replace("/image", "");
-                let path = self.gpt.create_image(result).await.unwrap();
-                let p = ["attachment://", &path].join(""); // write path in docker doesn't work'
-                let image_message = CreateEmbed::default()
-                    .image(p);
-
-                let create_message = CreateMessage::new()
-                    .embed(image_message)
-                    .add_file(CreateAttachment::path(path).await.unwrap());
-
-                let _ = msg.channel_id.send_message(&ctx.http, create_message).await;
-            }
-            _ => {
-                // no op
-            }
-        }
-    }
-}
