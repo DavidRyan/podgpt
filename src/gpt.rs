@@ -1,38 +1,38 @@
 use async_openai::{
-    config::OpenAIConfig, types::{
-        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs, CreateImageRequestArgs, ImageResponseFormat, ImageSize }, 
-    Client
+    Client,
+    config::OpenAIConfig,
+    types::{
+        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
+        CreateChatCompletionRequestArgs, CreateImageRequestArgs, ImageResponseFormat, ImageSize,
+    },
 };
 use std::error::Error;
 
 #[derive(Debug)]
 pub struct Conversation {
     pub _id: String,
-    pub messages: Vec<String>
+    pub messages: Vec<String>,
 }
 
 pub struct Gpt {
     client: Client<OpenAIConfig>,
-    conversation: Conversation
+    conversation: Conversation,
 }
-
 
 impl Gpt {
     pub fn new() -> Self {
         Gpt {
-            client:  Client::with_config(
-                         OpenAIConfig::new()
-                     ),
+            client: Client::with_config(OpenAIConfig::new()),
             conversation: Conversation {
                 _id: "1".to_string(),
-                messages: vec![]
-            }
+                messages: vec![],
+            },
         }
-    }}
+    }
+}
 
 impl Gpt {
-    pub async fn create_image(&self, prompt: String) -> Result<String, Box<dyn Error>> {
-
+    pub async fn _create_image(&self, prompt: String) -> Result<String, Box<dyn Error>> {
         let request = CreateImageRequestArgs::default()
             .prompt(prompt)
             .response_format(ImageResponseFormat::Url)
@@ -51,7 +51,6 @@ impl Gpt {
             .iter()
             .for_each(|path| println!("Image file path: {}", path.display()));
 
-
         let s = paths.first().unwrap().to_str().unwrap();
         println!("Image file path: {}", s);
         Ok(s.to_string())
@@ -62,7 +61,10 @@ impl Gpt {
         println!("Conversation: {:?}", self.conversation);
 
         //ChatCompletionRequestMessage
-        let mapped_messages: Vec<ChatCompletionRequestMessage> = self.conversation.messages.iter()
+        let mapped_messages: Vec<ChatCompletionRequestMessage> = self
+            .conversation
+            .messages
+            .iter()
             .map(|msg| {
                 ChatCompletionRequestSystemMessageArgs::default()
                     .content(msg.to_string())
@@ -78,7 +80,12 @@ impl Gpt {
             .messages(mapped_messages)
             .build()?;
         let response = self.client.chat().create(request).await?;
-        let msg = response.choices[0].message.clone().content.unwrap().to_string();
+        let msg = response.choices[0]
+            .message
+            .clone()
+            .content
+            .unwrap()
+            .to_string();
         self.conversation.messages.push(msg.clone());
         Ok(msg)
     }
@@ -87,18 +94,21 @@ impl Gpt {
         let request = CreateChatCompletionRequestArgs::default()
             .max_tokens(512u32)
             .model("gpt-4o")
-            .messages([
-                ChatCompletionRequestSystemMessageArgs::default()
+            .messages([ChatCompletionRequestSystemMessageArgs::default()
                 .content(promt.clone())
                 .build()?
-                .into(),
-            ])
+                .into()])
             .build()?;
         let response = self.client.chat().create(request).await?;
-        let msg = response.choices[0].message.clone().content.unwrap().to_string();
+        let msg = response.choices[0]
+            .message
+            .clone()
+            .content
+            .unwrap()
+            .to_string();
         self.conversation = Conversation {
             _id: response.id,
-            messages: vec![]
+            messages: vec![],
         };
         self.conversation.messages.push(promt);
         self.conversation.messages.push(msg.clone());

@@ -5,6 +5,5 @@ pub enum AllCommands {
     /// Chat with the bot
     Chat,
     /// Generate an image
-    Image
+    Image,
 }
-

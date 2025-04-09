@@ -1,23 +1,31 @@
 use crate::gpt::Gpt;
 
-use std::env;
 use poise::serenity_prelude as serenity;
+use std::env;
 use tokio::sync::Mutex;
 
 struct Data {
-    gpt: Mutex<Gpt>
-} // User data, which is stored and accessible in all command invocations
+    gpt: Mutex<Gpt>,
+}
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
-
 
 #[poise::command(slash_command, prefix_command)]
 async fn ask(
     ctx: Context<'_>,
-    #[description = "Ask Chat Gpt"] #[rest] prompt: String,
+    #[description = "Ask Chat Gpt"]
+    #[rest]
+    prompt: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-    let r = ctx.data().gpt.lock().await.create_chat(prompt).await.unwrap();
+    let r = ctx
+        .data()
+        .gpt
+        .lock()
+        .await
+        .create_chat(prompt)
+        .await
+        .unwrap();
     println!("Response: {}", r);
     ctx.say(r).await?;
     Ok(())
@@ -26,10 +34,19 @@ async fn ask(
 #[poise::command(slash_command, prefix_command)]
 async fn reply(
     ctx: Context<'_>,
-    #[description = "Reply to Chat Gpt"] #[rest] prompt: String,
+    #[description = "Reply to Chat Gpt"]
+    #[rest]
+    prompt: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-    let r = ctx.data().gpt.lock().await.reply_to_chat(prompt).await.unwrap();
+    let r = ctx
+        .data()
+        .gpt
+        .lock()
+        .await
+        .reply_to_chat(prompt)
+        .await
+        .unwrap();
     println!("Response: {}", r);
     ctx.say(r).await?;
     Ok(())
@@ -56,7 +73,7 @@ pub async fn run_discord_bot() {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
                 Ok(Data {
-                    gpt: Mutex::new(Gpt::new())
+                    gpt: Mutex::new(Gpt::new()),
                 })
             })
         })
@@ -65,7 +82,5 @@ pub async fn run_discord_bot() {
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
         .await;
-    client.unwrap().start().await.unwrap();    
+    client.unwrap().start().await.unwrap();
 }
-    
-
