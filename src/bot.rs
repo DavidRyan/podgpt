@@ -48,7 +48,30 @@ async fn reply(
         .await
         .unwrap();
     println!("Response: {}", r);
-    ctx.say(r).await?;
+    let split = split_message(&r);
+    say(&ctx, &split).await?;
+    Ok(())
+}
+
+
+fn split_message(message: &str) -> Vec<String> {
+    const MAX_LENGTH: usize = 2000;
+    if message.len() <= MAX_LENGTH {
+        vec![message.to_string()]
+    } else {
+        message
+            .chars()
+            .collect::<Vec<_>>()
+            .chunks(MAX_LENGTH)
+            .map(|chunk| chunk.iter().collect())
+            .collect()
+    }
+}
+
+async fn say(ctx: &Context<'_>, message: &[String]) -> Result<(), Error> {
+    for m in message.iter() {
+        ctx.say(m).await?;
+    }
     Ok(())
 }
 
