@@ -59,12 +59,21 @@ fn split_message(message: &str) -> Vec<String> {
     if message.len() <= MAX_LENGTH {
         vec![message.to_string()]
     } else {
-        message
-            .chars()
-            .collect::<Vec<_>>()
-            .chunks(MAX_LENGTH)
-            .map(|chunk| chunk.iter().collect())
-            .collect()
+        let mut result = Vec::new();
+        let mut start = 0;
+
+        while start < message.len() {
+            let end = (start + MAX_LENGTH).min(message.len());
+            let split_point = message[start..end]
+                .rfind('\n')
+                .map(|pos| start + pos + 1)
+                .unwrap_or(end);
+
+            result.push(message[start..split_point].to_string());
+            start = split_point;
+        }
+
+        result
     }
 }
 
