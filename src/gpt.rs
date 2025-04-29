@@ -31,36 +31,22 @@ impl Gpt {
     }
 }
 
-impl Gpt {
-    pub async fn _create_image(&self, prompt: String) -> Result<String, Box<dyn Error>> {
-        let request = CreateImageRequestArgs::default()
-            .prompt(prompt)
-            .response_format(ImageResponseFormat::Url)
-            .size(ImageSize::S256x256)
-            .user("async-openai")
-            .build()?;
+pub trait ImagePrompt {
+    async fn image_prompt(&self, prompt: String) -> Result<String, Box<dyn Error>>;
+}
 
-        let response = self.client.images().create(request).await?;
+pub trait ChatPrompt {
+    async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>>;
+    async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>>;
+}
 
-        // Download and save images to ./data directory.
-        // Each url is downloaded and saved in dedicated Tokio task.
-        // Directory is created if it doesn't exist.
-        let paths = response.save("./data").await?;
 
-        paths
-            .iter()
-            .for_each(|path| println!("Image file path: {}", path.display()));
+impl ChatPrompt for Gpt {
 
-        let s = paths.first().unwrap().to_str().unwrap();
-        println!("Image file path: {}", s);
-        Ok(s.to_string())
-    }
-
-    pub async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
+    async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
         self.conversation.messages.push(promt.clone());
         println!("Conversation: {:?}", self.conversation);
 
-        //ChatCompletionRequestMessage
         let mapped_messages: Vec<ChatCompletionRequestMessage> = self
             .conversation
             .messages
@@ -90,7 +76,7 @@ impl Gpt {
         Ok(msg)
     }
 
-    pub async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
+    async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
         let request = CreateChatCompletionRequestArgs::default()
             .max_tokens(512u32)
             .model("gpt-4o")
@@ -100,6 +86,7 @@ impl Gpt {
                 .into()])
             .build()?;
         let response = self.client.chat().create(request).await?;
+        println!("Response: {:?}", response);
         let msg = response.choices[0]
             .message
             .clone()
@@ -116,3 +103,14 @@ impl Gpt {
         Ok(msg)
     }
 }
+
+impl ImagePrompt for Gpt {
+    async fn image_prompt(&self, prompt: String) -> Result<String, Box<dyn Error>> {
+        // TODO - get image from Discord URL 
+        // - save locally
+        // - upload to GPT with prompt
+        // either dwnload and retur url or save and send to discord
+        Ok("OK".to_string())
+    }
+}
+

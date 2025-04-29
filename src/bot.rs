@@ -1,4 +1,6 @@
 use crate::gpt::Gpt;
+use crate::gpt::ImagePrompt;
+use crate::gpt::ChatPrompt;
 
 use poise::serenity_prelude as serenity;
 use std::env;
@@ -11,7 +13,7 @@ type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
 #[poise::command(slash_command, prefix_command)]
-async fn ask(
+async fn image_prompt(
     ctx: Context<'_>,
     #[description = "Ask Chat Gpt"]
     #[rest]
@@ -23,11 +25,31 @@ async fn ask(
         .gpt
         .lock()
         .await
+        .image_prompt(prompt)
+        .await
+        .unwrap();
+    Ok(())
+}
+
+#[poise::command(slash_command, prefix_command)]
+async fn ask(
+    ctx: Context<'_>,
+    #[description = "Ask Chat Gpt"]
+    #[rest]
+    prompt: String,
+) -> Result<(), Error> {
+    println!("Prompt: {}", prompt);
+    ctx.defer().await?;
+    let r = ctx
+        .data()
+        .gpt
+        .lock()
+        .await
         .create_chat(prompt)
         .await
         .unwrap();
     println!("Response: {}", r);
-    ctx.say(r).await?;
+    say(&ctx, r).await?;
     Ok(())
 }
 
@@ -48,14 +70,13 @@ async fn reply(
         .await
         .unwrap();
     println!("Response: {}", r);
-    let split = split_message(&r);
-    say(&ctx, &split).await?;
+    say(&ctx, r).await?;
     Ok(())
 }
 
 
 fn split_message(message: &str) -> Vec<String> {
-    const MAX_LENGTH: usize = 2000;
+    const MAX_LENGTH: usize = 1900;
     if message.len() <= MAX_LENGTH {
         vec![message.to_string()]
     } else {
@@ -77,8 +98,11 @@ fn split_message(message: &str) -> Vec<String> {
     }
 }
 
-async fn say(ctx: &Context<'_>, message: &[String]) -> Result<(), Error> {
-    for m in message.iter() {
+async fn say(ctx: &Context<'_>, r: String) -> Result<(), Error> {
+    let split = split_message(&r);
+    println!("Split: {:?}", split);
+    for m in split.iter() {
+        println!("Response: {}", m);
         ctx.say(m).await?;
     }
     Ok(())
@@ -97,7 +121,7 @@ pub async fn run_discord_bot() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ask(), reply(), register()],
+            commands: vec![ask(), reply(), register(), image_prompt()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
