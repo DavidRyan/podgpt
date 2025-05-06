@@ -28,6 +28,7 @@ async fn image_prompt(
         .image_prompt(prompt)
         .await
         .unwrap();
+    say(&ctx, r).await?;
     Ok(())
 }
 

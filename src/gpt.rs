@@ -1,10 +1,7 @@
 use async_openai::{
-    Client,
-    config::OpenAIConfig,
-    types::{
-        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
-        CreateChatCompletionRequestArgs, CreateImageRequestArgs, ImageResponseFormat, ImageSize,
-    },
+    config::OpenAIConfig, types::{
+        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs, CreateImageEditRequest, CreateImageRequestArgs, DallE2ImageSize, Image, ImageInput, ImageResponseFormat, ImageSize, InputSource
+    }, Client
 };
 use std::error::Error;
 
@@ -106,11 +103,34 @@ impl ChatPrompt for Gpt {
 
 impl ImagePrompt for Gpt {
     async fn image_prompt(&self, prompt: String) -> Result<String, Box<dyn Error>> {
+        let request = CreateImageEditRequest {
+            image: ImageInput{ 
+                source: InputSource::Path {
+                    path: "path/to/your/image.png".into(), 
+                }
+            }, 
+            prompt: prompt.clone(),
+            n: Some(1), // Number of images to generate
+            size: Some(DallE2ImageSize::S1024x1024), // Use the appropriate enum variant for size
+            ..Default::default()
+        };
+
+        let response = self.client.images().create_edit(request).await?;
+
+        let image_url = response.data.first().and_then(|image| match &**image {
+            Image::Url { url, .. } => Some(url.clone()),
+            Image::B64Json { .. } => None,
+        }).unwrap_or_else(|| "No URL found".to_string());
+
+        println!("Image URL: {}", image_url);
+
+
         // TODO - get image from Discord URL 
         // - save locally
         // - upload to GPT with prompt
         // either dwnload and retur url or save and send to discord
-        Ok("OK".to_string())
+        Ok(image_url.to_string())
     }
+
 }
 
