@@ -1,9 +1,17 @@
+use async_openai::types::{ImageInput, ImageModel};
 use async_openai::{
     config::OpenAIConfig, types::{
-        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs, CreateImageEditRequest, CreateImageRequestArgs, DallE2ImageSize, Image, ImageInput, ImageResponseFormat, ImageSize, InputSource
-    }, Client
+        ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs}, Client
 };
-use std::error::Error;
+use std::io::Cursor;
+use std::{error::Error, io::Write, path::PathBuf};
+use reqwest::multipart::{Form, Part};
+use std::fs;
+use std::path::Path;
+use std::env;
+use image::{io::Reader as ImageReader, GrayImage, Luma, ImageFormat};
+use image::codecs::png::PngEncoder;
+use image::ImageEncoder;
 
 #[derive(Debug)]
 pub struct Conversation {
@@ -29,7 +37,7 @@ impl Gpt {
 }
 
 pub trait ImagePrompt {
-    async fn image_prompt(&self, prompt: String) -> Result<String, Box<dyn Error>>;
+    async fn image_prompt(&self, image: Vec<u8>, prompt: String) -> Result<String, Box<dyn Error>>;
 }
 
 pub trait ChatPrompt {
@@ -37,6 +45,15 @@ pub trait ChatPrompt {
     async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>>;
 }
 
+fn save_image(image: Vec<u8>) -> Result<String, Box<dyn Error>> {
+    println!("Saving image: data/image.png");
+    let path = "data/image.png";
+    use std::fs::File;
+    let mut file = File::create(path)?;
+    file.write_all(&image).unwrap();
+    println!("Image saved to: {}", path);
+    Ok(path.to_string())
+}
 
 impl ChatPrompt for Gpt {
 
@@ -55,7 +72,7 @@ impl ChatPrompt for Gpt {
                     .unwrap()
                     .into()
             })
-            .collect::<Vec<_>>();
+        .collect::<Vec<_>>();
 
         let request = CreateChatCompletionRequestArgs::default()
             .max_tokens(512u32)
@@ -102,35 +119,61 @@ impl ChatPrompt for Gpt {
 }
 
 impl ImagePrompt for Gpt {
-    async fn image_prompt(&self, prompt: String) -> Result<String, Box<dyn Error>> {
-        let request = CreateImageEditRequest {
-            image: ImageInput{ 
-                source: InputSource::Path {
-                    path: "path/to/your/image.png".into(), 
-                }
-            }, 
-            prompt: prompt.clone(),
-            n: Some(1), // Number of images to generate
-            size: Some(DallE2ImageSize::S1024x1024), // Use the appropriate enum variant for size
-            ..Default::default()
-        };
+    async fn image_prompt(&self, image: Vec<u8>, prompt: String) -> Result<String, Box<dyn Error>> {
 
-        let response = self.client.images().create_edit(request).await?;
-
-        let image_url = response.data.first().and_then(|image| match &**image {
-            Image::Url { url, .. } => Some(url.clone()),
-            Image::B64Json { .. } => None,
-        }).unwrap_or_else(|| "No URL found".to_string());
-
-        println!("Image URL: {}", image_url);
+        let path = save_image(image).unwrap();
 
 
-        // TODO - get image from Discord URL 
-        // - save locally
-        // - upload to GPT with prompt
-        // either dwnload and retur url or save and send to discord
-        Ok(image_url.to_string())
+        let api_key = env::var("OPENAI_API_KEY")?;
+
+        // Read the image file
+        let image_bytes = fs::read(path)?;
+        let image_reader = ImageReader::with_format(std::io::Cursor::new(&image_bytes), ImageFormat::Png);
+        let image = image_reader.decode()?.to_rgba8();
+        let (width, height) = image.dimensions();
+        let mask = generate_white_mask(width, height).unwrap();
+
+        // Build multipart form with correct MIME
+        let form = Form::new()
+            .text("prompt", prompt.to_string())
+            .text("n", "1")
+            .part(
+                "image",
+                Part::bytes(image_bytes.clone())
+                .file_name("image.png")
+                .mime_str("image/png")?, // Important
+            )
+            .part(
+                "mask",
+                Part::bytes(mask)
+                .file_name("mask.png")
+                .mime_str("image/png")?,
+            );
+
+        // Send the request
+        let client = reqwest::Client::new();
+        let res = client
+            .post("https://api.openai.com/v1/images/edits")
+            .bearer_auth(api_key)
+            .multipart(form)
+            .send()
+            .await?;
+
+        let text = res.text().await?;
+        println!("Response: {}", text);
+
+        Ok(text.to_string())
+    }
+}
+
+fn generate_white_mask(width: u32, height: u32) -> Result<Vec<u8>, Box<dyn Error>> {
+    let mut mask = GrayImage::new(width, height);
+    for pixel in mask.pixels_mut() {
+        *pixel = Luma([255]); // white = fully editable
     }
 
+    let mut buf = Cursor::new(Vec::new());
+    mask.write_to(&mut buf, ImageFormat::Png)?;
+    Ok(buf.into_inner())
 }
 

@@ -3,6 +3,7 @@ use crate::gpt::ImagePrompt;
 use crate::gpt::ChatPrompt;
 
 use poise::serenity_prelude as serenity;
+use ::serenity::all::Attachment;
 use std::env;
 use tokio::sync::Mutex;
 
@@ -12,22 +13,28 @@ struct Data {
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
-#[poise::command(slash_command, prefix_command)]
+
+#[poise::command(slash_command)]
 async fn image_prompt(
     ctx: Context<'_>,
-    #[description = "Ask Chat Gpt"]
-    #[rest]
-    prompt: String,
+    #[description = "Your message text"] text: String,
+    #[description = "Image to upload"] image: Attachment,
 ) -> Result<(), Error> {
     ctx.defer().await?;
+
+    let image_bytes = image.download().await?;
+
+    println!("Image: {}", image_bytes.len());
+    
     let r = ctx
         .data()
         .gpt
         .lock()
         .await
-        .image_prompt(prompt)
+        .image_prompt(image_bytes, text)
         .await
         .unwrap();
+
     say(&ctx, r).await?;
     Ok(())
 }
@@ -42,7 +49,7 @@ async fn ask(
     println!("Prompt: {}", prompt);
     ctx.defer().await?;
     let r = ctx
-        .data()
+        .data() 
         .gpt
         .lock()
         .await

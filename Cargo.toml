@@ -5,7 +5,9 @@ edition = "2024"
 
 [dependencies]
 async-openai = "0.28.0"
+image = "0.25.6"
 poise = "0.6.1"
+reqwest = "0.12.15"
 serenity = "0.12.4"
 serenity-commands = "0.8.0"
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
