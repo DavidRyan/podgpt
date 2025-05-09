@@ -127,10 +127,18 @@ impl ImagePrompt for Gpt {
         let api_key = env::var("OPENAI_API_KEY")?;
 
         // Read the image file
-        let image_bytes = fs::read(path)?;
-        let image_reader = ImageReader::with_format(std::io::Cursor::new(&image_bytes), ImageFormat::Png);
+        let image_bytes = fs::read(&path)?;
+        let image_reader = ImageReader::with_format(Cursor::new(&image_bytes), ImageFormat::Png);
         let image = image_reader.decode()?.to_rgba8();
         let (width, height) = image.dimensions();
+
+
+        //TODO: Resize the image for DALL-e
+
+        // ❗ Ensure the image is one of the supported sizes
+        if !matches!((width, height), (256, 256) | (512, 512) | (1024, 1024)) {
+            return Err(format!("Image must be 256x256, 512x512, or 1024x1024, got {width}x{height}").into());
+        }
         let mask = generate_white_mask(width, height).unwrap();
 
         // Build multipart form with correct MIME
