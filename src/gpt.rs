@@ -4,14 +4,11 @@ use async_openai::{
         ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs}, Client
 };
 use std::io::Cursor;
-use std::{error::Error, io::Write, path::PathBuf};
+use std::{error::Error, io::Write};
 use reqwest::multipart::{Form, Part};
 use std::fs;
-use std::path::Path;
 use std::env;
 use image::{io::Reader as ImageReader, GrayImage, Luma, ImageFormat};
-use image::codecs::png::PngEncoder;
-use image::ImageEncoder;
 
 #[derive(Debug)]
 pub struct Conversation {
@@ -130,16 +127,14 @@ impl ImagePrompt for Gpt {
         let image_bytes = fs::read(&path)?;
         let image_reader = ImageReader::with_format(Cursor::new(&image_bytes), ImageFormat::Png);
         let image = image_reader.decode()?.to_rgba8();
-        let (width, height) = image.dimensions();
+        use image::{imageops::FilterType, imageops, RgbaImage};
 
+        let resized: RgbaImage = imageops::resize(&image, 512, 512, FilterType::Lanczos3);
+        resized.save("data/resized.png")?;
 
-        //TODO: Resize the image for DALL-e
-
-        // ❗ Ensure the image is one of the supported sizes
-        if !matches!((width, height), (256, 256) | (512, 512) | (1024, 1024)) {
-            return Err(format!("Image must be 256x256, 512x512, or 1024x1024, got {width}x{height}").into());
-        }
-        let mask = generate_white_mask(width, height).unwrap();
+        
+        let mask = generate_white_mask(resized.width(), resized.height()).unwrap();
+        let rezied_image_bytes = fs::read("data/resized.png")?;
 
         // Build multipart form with correct MIME
         let form = Form::new()
@@ -147,7 +142,7 @@ impl ImagePrompt for Gpt {
             .text("n", "1")
             .part(
                 "image",
-                Part::bytes(image_bytes.clone())
+                Part::bytes(rezied_image_bytes.clone())
                 .file_name("image.png")
                 .mime_str("image/png")?, // Important
             )
