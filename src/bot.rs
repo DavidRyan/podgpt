@@ -6,14 +6,7 @@ async fn image(
     prompt: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-    let url = {
-        ctx.data()
-            .gpt
-            .lock()
-            .await
-            .generate_image_from_prompt(prompt)
-            .await?
-    };
+    let url = ctx.data().image_generator.generate(&prompt).await?;
     ctx.say(format!("Image generated: {}", url)).await?;
     Ok(())
 }
@@ -26,8 +19,12 @@ use ::serenity::all::Attachment;
 use std::env;
 use tokio::sync::Mutex;
 
+use crate::services::image_generator::ImageGenerator;
+use std::sync::Arc;
+
 struct Data {
     gpt: Mutex<Gpt>,
+    image_generator: Arc<dyn ImageGenerator>,
 }
 
 // To expose in main registration, re-export here
@@ -157,8 +154,12 @@ pub async fn run_discord_bot() {
             println!("Bot is ready!");
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+                use crate::services::image_generator::{OpenAiImageGenerator, ImageGenerator};
+                let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
+                let image_generator: Arc<dyn ImageGenerator> = Arc::new(OpenAiImageGenerator::new(api_key));
                 Ok(Data {
                     gpt: Mutex::new(Gpt::new()),
+                    image_generator,
                 })
             })
         })
