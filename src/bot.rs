@@ -1,3 +1,22 @@
+#[poise::command(slash_command, prefix_command)]
+async fn image(
+    ctx: Context<'_>,
+    #[description = "Prompt for DALL·E"]
+    #[rest]
+    prompt: String,
+) -> Result<(), Error> {
+    ctx.defer().await?;
+    let url = {
+        ctx.data()
+            .gpt
+            .lock()
+            .await
+            .generate_image_from_prompt(prompt)
+            .await?
+    };
+    ctx.say(format!("Image generated: {}", url)).await?;
+    Ok(())
+}
 use crate::gpt::Gpt;
 use crate::gpt::ImagePrompt;
 use crate::gpt::ChatPrompt;
@@ -10,6 +29,8 @@ use tokio::sync::Mutex;
 struct Data {
     gpt: Mutex<Gpt>,
 }
+
+// To expose in main registration, re-export here
 type Error = Box<dyn std::error::Error + Send + Sync>;
 type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -129,7 +150,7 @@ pub async fn run_discord_bot() {
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
-            commands: vec![ask(), reply(), register(), image_prompt()],
+            commands: vec![ask(), reply(), register(), image_prompt(), image()],
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {

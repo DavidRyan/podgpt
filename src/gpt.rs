@@ -1,10 +1,31 @@
+use reqwest;
+use uuid::Uuid;
+use serde_json;
+
+impl Gpt {
+    pub async fn generate_image_from_prompt(&self, prompt: String) -> Result<String, Box<dyn StdError + Send + Sync>> {
+        let api_key = env::var("OPENAI_API_KEY")?;
+        let client = reqwest::Client::new();
+        let res = client
+            .post("https://api.openai.com/v1/images/generations")
+            .bearer_auth(api_key)
+            .header("Content-Type", "application/json")
+            .body(format!("{{\"prompt\": \"{}\", \"n\":1, \"size\":\"512x512\"}}", prompt.replace('"', "\\\"")))
+            .send()
+            .await?;
+        let res_json: serde_json::Value = res.json().await?;
+        let image_url = res_json["data"][0]["url"].as_str().ok_or("No image URL in response")?.to_string();
+        Ok(image_url)
+    }
+}
 use async_openai::types::{ImageInput, ImageModel};
 use async_openai::{
     config::OpenAIConfig, types::{
         ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs, CreateChatCompletionRequestArgs}, Client
 };
 use std::io::Cursor;
-use std::{error::Error, io::Write};
+use std::error::Error as StdError;
+use std::io::Write;
 use reqwest::multipart::{Form, Part};
 use std::fs;
 use std::env;
@@ -34,15 +55,15 @@ impl Gpt {
 }
 
 pub trait ImagePrompt {
-    async fn image_prompt(&self, image: Vec<u8>, prompt: String) -> Result<String, Box<dyn Error>>;
+    async fn image_prompt(&self, image: Vec<u8>, prompt: String) -> Result<String, Box<dyn StdError + Send + Sync>>;
 }
 
 pub trait ChatPrompt {
-    async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>>;
-    async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>>;
+    async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn StdError + Send + Sync>>;
+    async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn StdError + Send + Sync>>;
 }
 
-fn save_image(image: Vec<u8>) -> Result<String, Box<dyn Error>> {
+fn save_image(image: Vec<u8>) -> Result<String, Box<dyn StdError + Send + Sync>> {
     println!("Saving image: data/image.png");
     let path = "data/image.png";
     use std::fs::File;
@@ -54,7 +75,7 @@ fn save_image(image: Vec<u8>) -> Result<String, Box<dyn Error>> {
 
 impl ChatPrompt for Gpt {
 
-    async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
+    async fn reply_to_chat(&mut self, promt: String) -> Result<String, Box<dyn StdError + Send + Sync>> {
         self.conversation.messages.push(promt.clone());
         println!("Conversation: {:?}", self.conversation);
 
@@ -87,7 +108,7 @@ impl ChatPrompt for Gpt {
         Ok(msg)
     }
 
-    async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn Error>> {
+    async fn create_chat(&mut self, promt: String) -> Result<String, Box<dyn StdError + Send + Sync>> {
         let request = CreateChatCompletionRequestArgs::default()
             .max_tokens(512u32)
             .model("gpt-4o")
@@ -116,7 +137,7 @@ impl ChatPrompt for Gpt {
 }
 
 impl ImagePrompt for Gpt {
-    async fn image_prompt(&self, image: Vec<u8>, prompt: String) -> Result<String, Box<dyn Error>> {
+    async fn image_prompt(&self, image: Vec<u8>, prompt: String) -> Result<String, Box<dyn StdError + Send + Sync>> {
 
         let path = save_image(image).unwrap();
 
@@ -135,6 +156,8 @@ impl ImagePrompt for Gpt {
         
         let mask = generate_white_mask(resized.width(), resized.height()).unwrap();
         let rezied_image_bytes = fs::read("data/resized.png")?;
+
+        // (was: rezied_image_bytes.concat:)
 
         // Build multipart form with correct MIME
         let form = Form::new()
@@ -169,7 +192,7 @@ impl ImagePrompt for Gpt {
     }
 }
 
-fn generate_white_mask(width: u32, height: u32) -> Result<Vec<u8>, Box<dyn Error>> {
+fn generate_white_mask(width: u32, height: u32) -> Result<Vec<u8>, Box<dyn StdError + Send + Sync>> {
     let mut mask = GrayImage::new(width, height);
     for pixel in mask.pixels_mut() {
         *pixel = Luma([255]); // white = fully editable
