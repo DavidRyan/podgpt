@@ -1,6 +1,4 @@
-use crate::bot::Context;
-use crate::bot::Error;
-use crate::utils::say;
+use crate::bot::{say, Context, Error};
 
 #[poise::command(slash_command, prefix_command)]
 pub async fn ask(
@@ -10,18 +8,9 @@ pub async fn ask(
     prompt: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-
     let user_id = ctx.author().id.to_string();
-
-    let r = ctx
-        .data()
-        .gpt
-        .lock()
-        .await
-        .create_chat(user_id, prompt)
-        .await?;
-
-    say(&ctx, r).await?;
+    let response = ctx.data().chat.create(&user_id, &prompt).await?;
+    say(&ctx, response).await?;
     Ok(())
 }
 
@@ -33,17 +22,8 @@ pub async fn reply(
     prompt: String,
 ) -> Result<(), Error> {
     ctx.defer().await?;
-
     let user_id = ctx.author().id.to_string();
-
-    let r = ctx
-        .data()
-        .gpt
-        .lock()
-        .await
-        .reply_to_chat(user_id, prompt)
-        .await?;
-
-    say(&ctx, r).await?;
+    let response = ctx.data().chat.reply(&user_id, &prompt).await?;
+    say(&ctx, response).await?;
     Ok(())
 }

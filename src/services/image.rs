@@ -1,56 +1,83 @@
-use image::imageops::resize;
-use image::{GrayImage, ImageFormat, Luma};
-use reqwest::multipart::{Form, Part};
-use std::error::Error as StdError;
 use std::io::Cursor;
 
-pub struct ImageService;
+use async_openai::{
+    config::OpenAIConfig,
+    types::{
+        CreateImageEditRequestArgs, CreateImageRequestArgs, DallE2ImageSize, Image, ImageInput,
+        ImageSize, InputSource,
+    },
+    Client,
+};
+use image::imageops::resize;
+use image::{GrayImage, ImageFormat, Luma};
+
+use crate::error::AppError;
+
+pub struct ImageService {
+    client: Client<OpenAIConfig>,
+}
 
 impl ImageService {
-    pub async fn edit_image(image: Vec<u8>, prompt: String) -> Result<String, Box<dyn StdError + Send + Sync>> {
-        let api_key = crate::config::openai_api_key();
+    pub fn new(client: Client<OpenAIConfig>) -> Self {
+        Self { client }
+    }
 
-        let image_reader = image::ImageReader::with_format(Cursor::new(&image), ImageFormat::Png);
-        let image = image_reader.decode()?.to_rgba8();
+    pub async fn generate(&self, prompt: &str) -> Result<String, AppError> {
+        let request = CreateImageRequestArgs::default()
+            .prompt(prompt)
+            .n(1u8)
+            .size(ImageSize::S512x512)
+            .build()?;
 
-        let resized = resize(&image, 512, 512, image::imageops::FilterType::Lanczos3);
-        let mut resized_image_bytes = Vec::new();
-        resized.write_to(&mut Cursor::new(&mut resized_image_bytes), ImageFormat::Png)?;
+        let response = self.client.images().create(request).await?;
 
-        let mask = generate_white_mask(resized.width(), resized.height())?;
+        extract_url(&response.data)
+    }
 
-        let form = Form::new()
-            .text("prompt", prompt.to_string())
-            .text("n", "1")
-            .part(
-                "image",
-                Part::bytes(resized_image_bytes)
-                    .file_name("image.png")
-                    .mime_str("image/png")?,
-            )
-            .part(
-                "mask",
-                Part::bytes(mask)
-                    .file_name("mask.png")
-                    .mime_str("image/png")?,
-            );
+    pub async fn edit(&self, image_bytes: Vec<u8>, prompt: &str) -> Result<String, AppError> {
+        let img = image::ImageReader::new(Cursor::new(&image_bytes))
+            .with_guessed_format()?
+            .decode()?
+            .to_rgba8();
 
-        let client = reqwest::Client::new();
-        let res = client
-            .post("https://api.openai.com/v1/images/edits")
-            .bearer_auth(api_key)
-            .multipart(form)
-            .send()
-            .await?;
+        let resized = resize(&img, 512, 512, image::imageops::FilterType::Lanczos3);
+        let mut resized_bytes = Vec::new();
+        resized.write_to(&mut Cursor::new(&mut resized_bytes), ImageFormat::Png)?;
 
-        let text = res.text().await?;
-        println!("Image edit response: {}", text);
+        let mask_bytes = generate_white_mask(resized.width(), resized.height())?;
 
-        Ok(text)
+        let request = CreateImageEditRequestArgs::default()
+            .image(ImageInput {
+                source: InputSource::VecU8 {
+                    filename: "image.png".to_string(),
+                    vec: resized_bytes,
+                },
+            })
+            .mask(ImageInput {
+                source: InputSource::VecU8 {
+                    filename: "mask.png".to_string(),
+                    vec: mask_bytes,
+                },
+            })
+            .prompt(prompt)
+            .n(1u8)
+            .size(DallE2ImageSize::S512x512)
+            .build()?;
+
+        let response = self.client.images().create_edit(request).await?;
+
+        extract_url(&response.data)
     }
 }
 
-fn generate_white_mask(width: u32, height: u32) -> Result<Vec<u8>, Box<dyn StdError + Send + Sync>> {
+fn extract_url(data: &[std::sync::Arc<Image>]) -> Result<String, AppError> {
+    match data.first().map(|img| img.as_ref()) {
+        Some(Image::Url { url, .. }) => Ok(url.clone()),
+        _ => Err(AppError::NoImageUrl),
+    }
+}
+
+fn generate_white_mask(width: u32, height: u32) -> Result<Vec<u8>, AppError> {
     let mut mask = GrayImage::new(width, height);
     for pixel in mask.pixels_mut() {
         *pixel = Luma([255]);

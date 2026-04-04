@@ -1,17 +1,28 @@
-use poise::serenity_prelude as serenity;
-use tokio::sync::Mutex;
-
-use crate::services::image_generator::ImageGenerator;
-use crate::services::conversation::ConversationManager;
 use std::sync::Arc;
 
+use async_openai::{config::OpenAIConfig, Client};
+use poise::serenity_prelude as serenity;
+
+use crate::config::Config;
+use crate::error::AppError;
+use crate::services::chat::ChatService;
+use crate::services::image::ImageService;
+use crate::utils::split_message;
+
 pub struct Data {
-    pub gpt: Mutex<ConversationManager>,
-    pub image_generator: Arc<dyn ImageGenerator>,
+    pub chat: ChatService,
+    pub image: ImageService,
 }
 
-pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Error = AppError;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+pub async fn say(ctx: &Context<'_>, message: String) -> Result<(), Error> {
+    for part in split_message(&message) {
+        ctx.say(part).await?;
+    }
+    Ok(())
+}
 
 pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
     vec![
@@ -25,31 +36,46 @@ pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
     ]
 }
 
+async fn on_error(error: poise::FrameworkError<'_, Data, Error>) {
+    match error {
+        poise::FrameworkError::Command { error, ctx, .. } => {
+            tracing::error!("Command error: {error}");
+            let _ = ctx.say(format!("Something went wrong: {error}")).await;
+        }
+        other => {
+            if let Err(e) = poise::builtins::on_error(other).await {
+                tracing::error!("Unhandled error: {e}");
+            }
+        }
+    }
+}
+
 pub async fn run_discord_bot() {
-    let token = crate::config::discord_token();
-    let intents = serenity::GatewayIntents::non_privileged();
+    let config = Arc::new(Config::from_env());
+    let token = config.discord_token.clone();
+
+    let openai_config = OpenAIConfig::new().with_api_key(&config.openai_api_key);
+    let client = Client::with_config(openai_config);
+
+    let chat = ChatService::new(client.clone(), Arc::clone(&config));
+    let image = ImageService::new(client);
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: all_commands(),
+            on_error: |error| Box::pin(on_error(error)),
             ..Default::default()
         })
-        .setup(|ctx, _ready, framework| {
-            println!("Bot is ready!");
+        .setup(move |ctx, _ready, framework| {
+            tracing::info!("Bot is ready!");
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                use crate::services::image_generator::OpenAiImageGenerator;
-                let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY must be set");
-                let image_generator: Arc<dyn ImageGenerator> = Arc::new(OpenAiImageGenerator::new(api_key));
-                Ok(Data {
-                    gpt: Mutex::new(ConversationManager::new()),
-                    image_generator,
-                })
+                Ok(Data { chat, image })
             })
         })
         .build();
 
-    let client = serenity::ClientBuilder::new(token, intents)
+    let client = serenity::ClientBuilder::new(&token, serenity::GatewayIntents::non_privileged())
         .framework(framework)
         .await;
     client.unwrap().start().await.unwrap();
