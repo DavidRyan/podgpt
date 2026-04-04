@@ -1,7 +1,8 @@
 mod bot;
 mod commands;
-mod gpt;
+mod config;
 mod services;
+mod utils;
 
 use bot::run_discord_bot;
 
