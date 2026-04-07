@@ -9,7 +9,8 @@ pub async fn ask(
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let user_id = ctx.author().id.to_string();
-    let response = ctx.data().chat.create(&user_id, &prompt).await?;
+    let channel_id = ctx.channel_id().get();
+    let response = ctx.data().chat.create(&user_id, &prompt, channel_id).await?;
     say(&ctx, response).await?;
     Ok(())
 }
@@ -23,7 +24,8 @@ pub async fn reply(
 ) -> Result<(), Error> {
     ctx.defer().await?;
     let user_id = ctx.author().id.to_string();
-    let response = ctx.data().chat.reply(&user_id, &prompt).await?;
+    let channel_id = ctx.channel_id().get();
+    let response = ctx.data().chat.reply(&user_id, &prompt, channel_id).await?;
     say(&ctx, response).await?;
     Ok(())
 }

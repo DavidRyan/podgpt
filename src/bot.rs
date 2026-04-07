@@ -5,8 +5,10 @@ use poise::serenity_prelude as serenity;
 
 use crate::config::Config;
 use crate::error::AppError;
+use crate::services::channel_summary::ChannelSummaryTool;
 use crate::services::chat::ChatService;
 use crate::services::image::ImageService;
+use crate::services::url_reader::UrlReaderTool;
 use crate::utils::split_message;
 
 pub struct Data {
@@ -33,6 +35,7 @@ pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
         crate::commands::manage::conversations(),
         crate::commands::image::image(),
         crate::commands::image::image_prompt(),
+        crate::commands::roast::roast(),
     ]
 }
 
@@ -55,10 +58,8 @@ pub async fn run_discord_bot() {
     let token = config.discord_token.clone();
 
     let openai_config = OpenAIConfig::new().with_api_key(&config.openai_api_key);
-    let client = Client::with_config(openai_config);
-
-    let chat = ChatService::new(client.clone(), Arc::clone(&config));
-    let image = ImageService::new(client);
+    let openai_client = Client::with_config(openai_config);
+    let image = ImageService::new(openai_client.clone());
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
@@ -70,6 +71,11 @@ pub async fn run_discord_bot() {
             tracing::info!("Bot is ready!");
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
+
+                let mut chat = ChatService::new(openai_client, config);
+                chat.register_tool(UrlReaderTool::new());
+                chat.register_tool(ChannelSummaryTool::new(Arc::clone(&ctx.http)));
+
                 Ok(Data { chat, image })
             })
         })

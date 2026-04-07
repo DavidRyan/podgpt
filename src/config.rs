@@ -6,6 +6,7 @@ pub struct Config {
     pub model: String,
     pub max_tokens: u32,
     pub max_history_messages: usize,
+    pub tavily_api_key: Option<String>,
     pub system_prompt: String,
 }
 
@@ -20,6 +21,7 @@ impl Config {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(2048),
             max_history_messages: 50,
+            tavily_api_key: env::var("TAVILY_API_KEY").ok(),
             system_prompt: env::var("SYSTEM_PROMPT").unwrap_or_else(|_| {
                 "You are a helpful AI assistant in a Discord server. Keep responses concise."
                     .to_string()
