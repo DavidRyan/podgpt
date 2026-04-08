@@ -34,7 +34,6 @@ pub fn all_commands() -> Vec<poise::Command<Data, Error>> {
         crate::commands::manage::history(),
         crate::commands::manage::conversations(),
         crate::commands::image::image(),
-        crate::commands::image::image_prompt(),
         crate::commands::roast::roast(),
     ]
 }

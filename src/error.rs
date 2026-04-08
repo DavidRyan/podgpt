@@ -9,10 +9,7 @@ pub enum AppError {
     OpenAi(#[from] async_openai::error::OpenAIError),
 
     #[error("Image error: {0}")]
-    Image(#[from] image::ImageError),
-
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
+    Image(String),
 
     #[error("No active conversation. Use /ask first.")]
     NoConversation,

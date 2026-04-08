@@ -8,6 +8,7 @@ pub enum MessageRole {
 pub struct ChatMessage {
     pub role: MessageRole,
     pub content: String,
+    pub image_urls: Vec<String>,
 }
 
 #[derive(Debug)]

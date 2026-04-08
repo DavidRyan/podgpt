@@ -7,6 +7,7 @@ use serenity::http::Http;
 use serenity::model::id::ChannelId;
 
 use super::tools::Tool;
+use super::url_reader::{extract_urls, fetch_url_preview, to_fxtwitter_url};
 
 pub struct ChannelSummaryTool {
     http: Arc<Http>,
@@ -47,6 +48,17 @@ impl ChannelSummaryTool {
             };
 
             output.push_str(&format!("[{timestamp}] @{author}: {content}\n"));
+
+            // Inline tweet previews for Twitter/X links
+            let tweet_urls: Vec<String> = extract_urls(&content)
+                .into_iter()
+                .filter(|url| to_fxtwitter_url(url).is_some())
+                .collect();
+
+            for url in &tweet_urls {
+                let preview = fetch_url_preview(url).await;
+                output.push_str(&format!("  ↳ {preview}\n"));
+            }
         }
 
         Ok(output)
