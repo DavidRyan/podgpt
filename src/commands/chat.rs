@@ -63,7 +63,12 @@ async fn send_response(ctx: &Context<'_>, response: ChatResponse) -> Result<(), 
     if response.images.is_empty() {
         say(ctx, response.text).await?;
     } else {
-        let mut reply = CreateReply::default().content(&response.text);
+        let text = if response.text.is_empty() {
+            "Here you go!".to_string()
+        } else {
+            response.text
+        };
+        let mut reply = CreateReply::default().content(&text);
         for (i, bytes) in response.images.iter().enumerate() {
             let filename = if response.images.len() == 1 {
                 "image.png".to_string()

@@ -298,12 +298,12 @@ impl ChatService {
                 }
             }
 
-            return choice
+            return Ok(choice
                 .message
                 .content
                 .as_deref()
-                .map(|s| s.to_string())
-                .ok_or(AppError::NoResponseContent);
+                .unwrap_or("")
+                .to_string());
         }
 
         Err(AppError::NoResponseContent)
